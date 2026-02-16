@@ -81,33 +81,25 @@ async function startScan(){
     scanner = new Html5Qrcode("reader");
 
     await scanner.start(
-      cameraId,
-      {
-        fps: 12,
-        // ✅ JANは横長バーコードなので枠を大きめ＆高さも確保
-        qrbox: { width: 360, height: 220 },
-        // ✅ 反転判定を切って無駄な探索を減らす（バーコードには基本不要）
-        disableFlip: true,
-        // ✅ 端末が対応してたら高速な検出器を使う（対応してない場合は無視される）
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-      },
-      (decodedText) => {
-        // ✅ 連続発火防止
-        if (scanLock) return;
-        scanLock = true;
+  cameraId,
+  {
+    fps: 12,
 
-        document.getElementById("input").value = decodedText;
+    // ← 枠を固定表示
+    qrbox: function(viewfinderWidth, viewfinderHeight) {
+      const width = Math.min(viewfinderWidth, 350);
+      const height = width * 0.6;
+      return { width, height };
+    },
 
-        // 検索を走らせる（ここはそのままでOK）
-        search();
+    aspectRatio: 1.777,
 
-        // ✅ ちゃんと停止（Promise待ちはここではできないので then で）
-        stopScan().catch(() => {}).finally(() => {
-          // 念のため解除（次回スキャンのため）
-          scanLock = false;
-        });
-      }
-    );
+    disableFlip: true
+
+    // ← これを削除する
+    // experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+
+  },
 
   } catch(e){
     alert("スキャン開始エラー: " + (e && e.message ? e.message : String(e)));

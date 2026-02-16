@@ -56,11 +56,13 @@
 
   // ===== カメラ =====
   let scanner = null;
-  let scanning = false;
+let scanning = false;
+let scanLock = false;   // ← 追加：読み取った瞬間にロックして止める
 
-  async function startScan(){
+async function startScan(){
   if (scanning) return;
   scanning = true;
+  scanLock = false;
 
   try{
     const cameras = await Html5Qrcode.getCameras();
@@ -70,23 +72,40 @@
       return;
     }
 
-    // 背面っぽいカメラを優先（iPhoneで安定）
     const back = cameras.find(c =>
       (c.label || "").toLowerCase().includes("back") ||
       (c.label || "").toLowerCase().includes("rear")
     );
-
-    // 見つからなければ「最後」を採用（背面が最後に来ることが多い）
     const cameraId = (back ? back.id : cameras[cameras.length - 1].id);
 
     scanner = new Html5Qrcode("reader");
+
     await scanner.start(
       cameraId,
-      { fps: 10, qrbox: { width: 200, height: 150 } },
+      {
+        fps: 12,
+        // ✅ JANは横長バーコードなので枠を大きめ＆高さも確保
+        qrbox: { width: 360, height: 220 },
+        // ✅ 反転判定を切って無駄な探索を減らす（バーコードには基本不要）
+        disableFlip: true,
+        // ✅ 端末が対応してたら高速な検出器を使う（対応してない場合は無視される）
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      },
       (decodedText) => {
+        // ✅ 連続発火防止
+        if (scanLock) return;
+        scanLock = true;
+
         document.getElementById("input").value = decodedText;
+
+        // 検索を走らせる（ここはそのままでOK）
         search();
-        stopScan();
+
+        // ✅ ちゃんと停止（Promise待ちはここではできないので then で）
+        stopScan().catch(() => {}).finally(() => {
+          // 念のため解除（次回スキャンのため）
+          scanLock = false;
+        });
       }
     );
 
@@ -96,16 +115,17 @@
   }
 }
 
+async function stopScan(){
+  // 先にフラグを落として “止めたい意志” を固定
+  scanning = false;
 
-  async function stopScan(){
-    if (!scanner || !scanning) return;
+  if (!scanner) return;
 
-    try { await scanner.stop(); } catch(e) {}
-    try { await scanner.clear(); } catch(e) {}
+  try { await scanner.stop(); } catch(e) {}
+  try { await scanner.clear(); } catch(e) {}
 
-    scanner = null;
-    scanning = false;
-  }
+  scanner = null;
+}
 
   // ===== 検索 =====
   function search() {

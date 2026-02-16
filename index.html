@@ -52,146 +52,72 @@
 </div>
 
 <script>
-  let currentProduct = null;
 
-  // ===== カメラ =====
-  let scanner = null;
+let scanner = null;
 let scanning = false;
-let scanLock = false;   // ← 追加：読み取った瞬間にロックして止める
 
 async function startScan(){
+
   if (scanning) return;
+
   scanning = true;
-  scanLock = false;
 
   try{
+
     const cameras = await Html5Qrcode.getCameras();
-    if (!cameras || cameras.length === 0) {
+
+    if (!cameras.length){
       alert("カメラが見つかりません");
       scanning = false;
       return;
     }
 
-    const back = cameras.find(c =>
-      (c.label || "").toLowerCase().includes("back") ||
-      (c.label || "").toLowerCase().includes("rear")
-    );
-    const cameraId = (back ? back.id : cameras[cameras.length - 1].id);
+    const cameraId = cameras[cameras.length - 1].id;
 
     scanner = new Html5Qrcode("reader");
 
     await scanner.start(
-  cameraId,
-  {
-    fps: 12,
+      cameraId,
+      {
+        fps: 15,
+        qrbox: 250
+      },
+      (decodedText)=>{
 
-    // ← 枠を固定表示
-    qrbox: function(viewfinderWidth, viewfinderHeight) {
-      const width = Math.min(viewfinderWidth, 350);
-      const height = width * 0.6;
-      return { width, height };
-    },
+        document.getElementById("input").value = decodedText;
 
-    aspectRatio: 1.777,
+        search();
 
-    disableFlip: true
+        stopScan();
 
-    // ← これを削除する
-    // experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      }
+    );
 
-  },
+  }catch(e){
 
-  } catch(e){
-    alert("スキャン開始エラー: " + (e && e.message ? e.message : String(e)));
+    alert("エラー：" + e);
+
     scanning = false;
+
   }
+
 }
+
 
 async function stopScan(){
-  // 先にフラグを落として “止めたい意志” を固定
-  scanning = false;
 
-  if (!scanner) return;
+  if(!scanner) return;
 
-  try { await scanner.stop(); } catch(e) {}
-  try { await scanner.clear(); } catch(e) {}
+  await scanner.stop();
+
+  await scanner.clear();
 
   scanner = null;
+
+  scanning = false;
+
 }
 
-  // ===== 検索 =====
-  function search() {
-    const input = document.getElementById("input").value;
-
-    google.script.run.withSuccessHandler(function(res){
-      if(res){
-        currentProduct = res;
-        document.getElementById("result").innerText =
-          "✅ 商品: " + res.name + "（" + res.id + "）";
-      } else {
-        currentProduct = null;
-        document.getElementById("result").innerText =
-          "❌ 商品が見つかりません（手動登録を使ってください）";
-      }
-    }).withFailureHandler(function(err){
-      alert("検索エラー: " + err.message);
-    }).searchProduct(input);
-  }
-
-  // ===== 登録 =====
-  function registerTx(type){
-    if(!currentProduct){
-      alert("先に商品を検索してください（見つからない場合は手動登録）");
-      return;
-    }
-    const qty = document.getElementById("qty").value;
-
-    google.script.run.withSuccessHandler(function(msg){
-      alert(msg);
-      document.getElementById("qty").value = 1;
-      document.getElementById("input").value = "";
-      currentProduct = null;
-      document.getElementById("result").innerText = "";
-    }).withFailureHandler(function(err){
-      alert("登録エラー: " + err.message);
-    }).registerTransaction(type, currentProduct.id, qty);
-  }
-
-  // ===== 手動登録の開閉 =====
-  function toggleManual(){
-    const box = document.getElementById("manualBox");
-    box.style.display = (box.style.display === "none") ? "block" : "none";
-  }
-
-  // ===== 新規追加 =====
-  function addNew(){
-    const name = document.getElementById("newName").value;
-    const jan  = document.getElementById("newJan").value;
-    const cost = document.getElementById("newCost").value;
-
-    google.script.run.withSuccessHandler(function(res){
-      if(res.ok){
-        document.getElementById("addResult").innerText =
-          "✅ 追加しました: " + res.name + "（" + res.id + "）";
-
-        // 追加した商品を選択状態にする
-        currentProduct = { id: res.id, name: res.name };
-        document.getElementById("result").innerText =
-          "✅ 商品: " + res.name + "（" + res.id + "）";
-
-        // ✅ 入力クリアして閉じる
-        document.getElementById("newName").value = "";
-        document.getElementById("newJan").value = "";
-        document.getElementById("newCost").value = "";
-        toggleManual();
-
-      } else {
-        document.getElementById("addResult").innerText = "⚠ " + res.message;
-      }
-    }).withFailureHandler(function(err){
-      alert("追加エラー: " + err.message);
-    }).addNewProduct(name, jan, cost);
-  }
 </script>
 
 </body>

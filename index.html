@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body{ font-family: Arial, sans-serif; padding:20px; margin:0; text-align:center; }
+    input, button{ width:100%; padding:15px; font-size:18px; margin-top:10px; box-sizing:border-box; }
+    button{ background:#2e7d32; color:white; border:none; border-radius:8px; }
+    .subbtn{ background:#1565c0; }
+    .danger{ background:#c62828; }
+    .box{ margin-top:18px; padding-top:12px; border-top:1px solid #ddd; }
+    #reader{ width:100%; margin-top:12px; }
+    .small{ font-size:14px; color:#666; margin-top:6px; }
+  </style>
+</head>
+<body>
+
+<h2>📦 商品登録</h2>
+
+<!-- ✅ カメラ読み取り -->
+<button class="subbtn" onclick="startScan()">📷 スキャン開始</button>
+<button class="danger" onclick="stopScan()">⛔ スキャン停止</button>
+<div class="small">※カメラ許可が出たら「許可」。JANが読めたら自動で検索します。</div>
+<div id="reader"></div>
+
+<input id="input" placeholder="バーコード(JAN) or 商品名で検索">
+<input id="qty" type="number" value="1" min="1">
+
+<button onclick="search()">検索</button>
+<button onclick="registerTx('仕入')">仕入れ</button>
+<button onclick="registerTx('売上')">売上</button>
+
+<p id="result"></p>
+
+<button onclick="toggleManual()">➕ 手動で商品登録</button>
+
+<div id="manualBox" style="display:none;" class="box">
+
+  <h3>新規商品登録</h3>
+
+  <input id="newName" placeholder="商品名">
+  <input id="newJan" placeholder="JANコード">
+  <input id="newCost" placeholder="仕入単価">
+
+  <button class="subbtn" onclick="addNew()">商品マスタに追加</button>
+
+  <p id="addResult"></p>
+
+</div>
+
+<script>
+  let currentProduct = null;
+
+  // ===== カメラ =====
+  let scanner = null;
+  let scanning = false;
+
+  async function startScan(){
+
+  if (scanning) return;
+  scanning = true;
+
+  try{
+
+    // 利用可能カメラ一覧を取得
+    const cameras = await Html5Qrcode.getCameras();
+
+    if (!cameras || cameras.length === 0) {
+      alert("カメラが見つかりません");
+      scanning = false;
+      return;
+    }
+
+    // 背面カメラを優先（なければ最初）
+    const backCamera = cameras.find(c =>
+      c.label.toLowerCase().includes("back") ||
+      c.label.toLowerCase().includes("rear")
+    );
+
+    const cameraId = backCamera ? backCamera.id : cameras[0].id;
+
+    scanner = new Html5Qrcode("reader");
+
+    await scanner.start(
+      cameraId,
+      {
+        fps: 8,
+        qrbox: { width: 250, height: 120 }
+      },
+      (decodedText) => {
+
+        document.getElementById("input").value = decodedText;
+
+        search();
+
+        stopScan();
+
+      }
+    );
+
+  }catch(e){
+
+    alert("スキャン開始エラー: " + e);
+
+    scanning = false;
+
+  }
+
+}
+
+
+  async function stopScan(){
+    if (!scanner || !scanning) return;
+
+    try { await scanner.stop(); } catch(e) {}
+    try { await scanner.clear(); } catch(e) {}
+
+    scanner = null;
+    scanning = false;
+  }
+
+  // ===== 検索 =====
+  function search() {
+    const input = document.getElementById("input").value;
+
+    google.script.run.withSuccessHandler(function(res){
+      if(res){
+        currentProduct = res;
+        document.getElementById("result").innerText =
+          "✅ 商品: " + res.name + "（" + res.id + "）";
+      } else {
+        currentProduct = null;
+        document.getElementById("result").innerText =
+          "❌ 商品が見つかりません（手動登録を使ってください）";
+      }
+    }).withFailureHandler(function(err){
+      alert("検索エラー: " + err.message);
+    }).searchProduct(input);
+  }
+
+  // ===== 登録 =====
+  function registerTx(type){
+    if(!currentProduct){
+      alert("先に商品を検索してください（見つからない場合は手動登録）");
+      return;
+    }
+    const qty = document.getElementById("qty").value;
+
+    google.script.run.withSuccessHandler(function(msg){
+      alert(msg);
+      document.getElementById("qty").value = 1;
+      document.getElementById("input").value = "";
+      currentProduct = null;
+      document.getElementById("result").innerText = "";
+    }).withFailureHandler(function(err){
+      alert("登録エラー: " + err.message);
+    }).registerTransaction(type, currentProduct.id, qty);
+  }
+
+  // ===== 手動登録の開閉 =====
+  function toggleManual(){
+    const box = document.getElementById("manualBox");
+    box.style.display = (box.style.display === "none") ? "block" : "none";
+  }
+
+  // ===== 新規追加 =====
+  function addNew(){
+    const name = document.getElementById("newName").value;
+    const jan  = document.getElementById("newJan").value;
+    const cost = document.getElementById("newCost").value;
+
+    google.script.run.withSuccessHandler(function(res){
+      if(res.ok){
+        document.getElementById("addResult").innerText =
+          "✅ 追加しました: " + res.name + "（" + res.id + "）";
+
+        // 追加した商品を選択状態にする
+        currentProduct = { id: res.id, name: res.name };
+        document.getElementById("result").innerText =
+          "✅ 商品: " + res.name + "（" + res.id + "）";
+
+        // ✅ 入力クリアして閉じる
+        document.getElementById("newName").value = "";
+        document.getElementById("newJan").value = "";
+        document.getElementById("newCost").value = "";
+        toggleManual();
+
+      } else {
+        document.getElementById("addResult").innerText = "⚠ " + res.message;
+      }
+    }).withFailureHandler(function(err){
+      alert("追加エラー: " + err.message);
+    }).addNewProduct(name, jan, cost);
+  }
+</script>
+
+</body>
+</html>
+
+<input id="newName" placeholder="新しい商品名（例：いちご大福）">
+<input id="newJan" placeholder="JAN（あれば）">
+<input id="newCost" type="number" inputmode="decimal" placeholder="仕入単価（例：120）">
+<button class="subbtn" onclick="addNew()">商品マスタに追加</button>
+<p id="addResult"></p>

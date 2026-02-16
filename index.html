@@ -80,7 +80,7 @@
     scanner = new Html5Qrcode("reader");
     await scanner.start(
       cameraId,
-      { fps: 8, qrbox: { width: 250, height: 120 } },
+      { fps: 10, qrbox: { width: 320, height: 120 } },
       (decodedText) => {
         document.getElementById("input").value = decodedText;
         search();

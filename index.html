@@ -69,8 +69,6 @@ border:3px solid red;
 
   // ======= カメラ =======
   let scanner = null;
-  let scanning = false;
-  let scanLock = false;
 
  async function startScan(){
 
@@ -91,12 +89,16 @@ border:3px solid red;
 }
 
   async function stopScan(){
-    scanning = false;
-    if (!scanner) return;
-    try { await scanner.stop(); } catch(e) {}
-    try { await scanner.clear(); } catch(e) {}
-    scanner = null;
-  }
+
+ if(scanner){
+
+  await scanner.stop();
+  await scanner.clear();
+  scanner=null;
+
+ }
+
+}
 
   // ======= 検索 =======
   async function search() {

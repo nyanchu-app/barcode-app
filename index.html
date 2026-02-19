@@ -248,38 +248,37 @@ function search(){
 
 
 
-function registerTx(type){
+async function registerTx(type){
 
- if(!currentProduct){
+  if(!currentProduct){
+    alert("商品を選択してください");
+    return;
+  }
 
-  alert("商品を検索して");
+  const qty =
+  document.getElementById("qty").value;
 
-  return;
+  await fetch("GASのURLをここに貼る",{
 
- }
+    method:"POST",
 
+    headers:{
+      "Content-Type":"application/json"
+    },
 
- const qty = document.getElementById("qty").value;
+    body:JSON.stringify({
 
+      action:"addSale",
 
- google.script.run
+      productId:currentProduct.id,
 
- .withSuccessHandler(function(msg){
+      qty:qty
 
-  alert(msg);
+    })
 
- })
+  });
 
- .registerTransaction(
-
-  type,
-
-  currentProduct.id,
-
-  qty
-
- );
-
+  alert("登録完了");
 
 }
 

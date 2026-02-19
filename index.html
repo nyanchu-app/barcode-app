@@ -21,7 +21,12 @@
 <button class="subbtn" onclick="startScan()">📷 スキャン開始</button>
 <button class="danger" onclick="stopScan()">⛔ スキャン停止</button>
 <div class="small">※JANが読めたら自動で検索します</div>
-<div id="reader"></div>
+<div id="reader" style="
+width:300px;
+height:200px;
+margin:20px auto;
+border:3px solid red;
+"></div>
 
 <input id="input" placeholder="バーコード(JAN) or 商品名で検索">
 <input id="qty" type="number" value="1" min="1">
@@ -67,51 +72,23 @@
   let scanning = false;
   let scanLock = false;
 
-  async function startScan(){
-    if (scanning) return;
-    scanning = true;
-    scanLock = false;
+ async function startScan(){
 
-    try{
-      const cameras = await Html5Qrcode.getCameras();
-      if (!cameras || cameras.length === 0) {
-        alert("カメラが見つかりません");
-        scanning = false;
-        return;
-      }
+ scanner = new Html5Qrcode("reader");
 
-      const back = cameras.find(c =>
-        (c.label || "").toLowerCase().includes("back") ||
-        (c.label || "").toLowerCase().includes("rear")
-      );
-      const cameraId = (back ? back.id : cameras[cameras.length - 1].id);
-
-      scanner = new Html5Qrcode("reader");
-
-      await scanner.start(
-        cameraId,
-        {
-          fps: 12,
-          qrbox: { width: 360, height: 220 },
-          disableFlip: true
-        },
-        (decodedText) => {
-          if (scanLock) return;
-          scanLock = true;
-
-          document.getElementById("input").value = decodedText;
-          search().finally(() => {
-            stopScan();
-            scanLock = false;
-          });
-        }
-      );
-
-    } catch(e){
-      alert("スキャン開始エラー: " + (e && e.message ? e.message : String(e)));
-      scanning = false;
-    }
+ await scanner.start(
+  { facingMode: "environment" },
+  {
+   fps: 10,
+   qrbox: 250
+  },
+  (decodedText)=>{
+   document.getElementById("input").value=decodedText;
+   stopScan();
   }
+ );
+
+}
 
   async function stopScan(){
     scanning = false;

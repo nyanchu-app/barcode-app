@@ -1,345 +1,225 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-
-<meta name="viewport" content="width=device-width, initial-scale=1">
-
-<script src="https://unpkg.com/html5-qrcode"></script>
-
-<style>
-
-body{
- font-family: Arial, sans-serif;
- padding:20px;
- margin:0;
- text-align:center;
-}
-
-input, button{
- width:100%;
- padding:15px;
- font-size:18px;
- margin-top:10px;
- box-sizing:border-box;
-}
-
-button{
- background:#2e7d32;
- color:white;
- border:none;
- border-radius:8px;
-}
-
-.subbtn{
- background:#1565c0;
-}
-
-.danger{
- background:#c62828;
-}
-
-.box{
- margin-top:18px;
- padding-top:12px;
- border-top:1px solid #ddd;
-}
-
-#reader{
- width:100%;
- margin-top:12px;
-}
-
-.small{
- font-size:14px;
- color:#666;
- margin-top:6px;
-}
-
-</style>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    body{ font-family: Arial, sans-serif; padding:20px; margin:0; text-align:center; }
+    input, button{ width:100%; padding:15px; font-size:18px; margin-top:10px; box-sizing:border-box; }
+    button{ background:#2e7d32; color:white; border:none; border-radius:8px; }
+    .subbtn{ background:#1565c0; }
+    .danger{ background:#c62828; }
+    .box{ margin-top:18px; padding-top:12px; border-top:1px solid #ddd; }
+    #reader{ width:100%; margin-top:12px; }
+    .small{ font-size:14px; color:#666; margin-top:6px; }
+  </style>
 </head>
-
-
 <body>
 
 <h2>📦 商品登録</h2>
 
-
 <button class="subbtn" onclick="startScan()">📷 スキャン開始</button>
-
 <button class="danger" onclick="stopScan()">⛔ スキャン停止</button>
-
-<div class="small">
-※JANコードを読み取ると自動検索されます
-</div>
-
+<div class="small">※JANが読めたら自動で検索します</div>
 <div id="reader"></div>
 
-
-
-<input id="input" placeholder="バーコード(JAN) or 商品名">
-
-<input id="qty" type="number" value="1">
-
-
+<input id="input" placeholder="バーコード(JAN) or 商品名で検索">
+<input id="qty" type="number" value="1" min="1">
 
 <button onclick="search()">検索</button>
-
-<button onclick="registerTx('仕入')">仕入れ</button>
-
+<button onclick="registerTx('仕入れ')">仕入れ</button>
 <button onclick="registerTx('売上')">売上</button>
-
-
 
 <p id="result"></p>
 
-
-
 <button onclick="toggleManual()">➕ 手動で商品登録</button>
 
-
-
 <div id="manualBox" style="display:none;" class="box">
+  <h3>新規商品登録</h3>
 
-<h3>新規商品登録</h3>
+  <input id="newName" placeholder="商品名">
+  <input id="newJan" placeholder="JANコード（あれば）">
+  <input id="newCost" type="number" inputmode="decimal" placeholder="仕入単価（例：120）">
 
-<input id="newName" placeholder="商品名">
-
-<input id="newJan" placeholder="JANコード">
-
-<input id="newCost" placeholder="仕入単価">
-
-<button class="subbtn" onclick="addNew()">
-商品マスタに追加
-</button>
-
-<p id="addResult"></p>
-
+  <button class="subbtn" onclick="addNew()">商品マスタに追加</button>
+  <p id="addResult"></p>
 </div>
 
-
-
 <script>
+  // ======= ★ここだけ必ず設定 =======
+  const API_URL = "【https://script.google.com/macros/s/AKfycbzE3trZMoKl_HEOCZveEHd3niYDssEAetmCahHohcAwgQhH_-0aMHzbfXRzPMJ4cUSw/exec】";
+  // =================================
 
+  let currentProduct = null;
 
-let currentProduct = null;
-
-let scanner = null;
-
-let scanning = false;
-
-
-
-async function startScan(){
-
- if(scanning) return;
-
- scanning = true;
-
- try{
-
-  const cameras = await Html5Qrcode.getCameras();
-
-  if(!cameras.length){
-
-   alert("カメラなし");
-
-   scanning=false;
-
-   return;
-
+  // ======= API呼び出し（共通） =======
+  async function api(payload){
+    const res = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
   }
 
+  // ======= カメラ =======
+  let scanner = null;
+  let scanning = false;
+  let scanLock = false;
 
-  const cameraId = cameras[cameras.length - 1].id;
+  async function startScan(){
+    if (scanning) return;
+    scanning = true;
+    scanLock = false;
 
+    try{
+      const cameras = await Html5Qrcode.getCameras();
+      if (!cameras || cameras.length === 0) {
+        alert("カメラが見つかりません");
+        scanning = false;
+        return;
+      }
 
-  scanner = new Html5Qrcode("reader");
+      const back = cameras.find(c =>
+        (c.label || "").toLowerCase().includes("back") ||
+        (c.label || "").toLowerCase().includes("rear")
+      );
+      const cameraId = (back ? back.id : cameras[cameras.length - 1].id);
 
+      scanner = new Html5Qrcode("reader");
 
-  await scanner.start(
+      await scanner.start(
+        cameraId,
+        {
+          fps: 12,
+          qrbox: { width: 360, height: 220 },
+          disableFlip: true
+        },
+        (decodedText) => {
+          if (scanLock) return;
+          scanLock = true;
 
-   cameraId,
+          document.getElementById("input").value = decodedText;
+          search().finally(() => {
+            stopScan();
+            scanLock = false;
+          });
+        }
+      );
 
-   {
-
-    fps:15,
-
-    qrbox:250
-
-   },
-
-
-   (decodedText)=>{
-
-    document.getElementById("input").value = decodedText;
-
-    search();
-
-    stopScan();
-
-   }
-
-  );
-
-
- }catch(e){
-
-  alert("カメラエラー："+e);
-
-  scanning=false;
-
- }
-
-}
-
-
-
-async function stopScan(){
-
- if(!scanner) return;
-
- await scanner.stop();
-
- await scanner.clear();
-
- scanner=null;
-
- scanning=false;
-
-}
-
-
-
-function search(){
-
- const input = document.getElementById("input").value;
-
-
- google.script.run
-
- .withSuccessHandler(function(res){
-
-  if(res){
-
-   currentProduct=res;
-
-   document.getElementById("result").innerText=
-
-   "✅ "+res.name;
-
-  }else{
-
-   currentProduct=null;
-
-   document.getElementById("result").innerText=
-
-   "❌ 商品なし";
-
+    } catch(e){
+      alert("スキャン開始エラー: " + (e && e.message ? e.message : String(e)));
+      scanning = false;
+    }
   }
 
- })
-
- .searchProduct(input);
-
-
-}
-
-
-
-async function registerTx(type){
-
-  if(!currentProduct){
-    alert("商品を選択してください");
-    return;
+  async function stopScan(){
+    scanning = false;
+    if (!scanner) return;
+    try { await scanner.stop(); } catch(e) {}
+    try { await scanner.clear(); } catch(e) {}
+    scanner = null;
   }
 
-  const qty =
-  document.getElementById("qty").value;
+  // ======= 検索 =======
+  async function search() {
+    const input = document.getElementById("input").value.trim();
+    if(!input){
+      document.getElementById("result").innerText = "";
+      currentProduct = null;
+      return;
+    }
 
-  await fetch("https://script.google.com/macros/s/AKfycbz0ApebyuFBAM39WGZKPX174ZW5H1YP-mXAkHN56CsD0H6NGfVouTzRuadmorMnSVoi/exec",{
+    try{
+      const res = await api({ action: "searchProduct", query: input });
 
-    method:"POST",
+      if(res && res.found){
+        currentProduct = res;
+        document.getElementById("result").innerText =
+          "✅ 商品: " + res.name + "（" + res.id + "）";
+      } else {
+        currentProduct = null;
+        document.getElementById("result").innerText =
+          "❌ 商品が見つかりません（手動登録できます）";
+      }
+    } catch(err){
+      alert("検索エラー: " + err);
+    }
+  }
 
-    headers:{
-      "Content-Type":"application/json"
-    },
+  // ======= 仕入/売上 登録 =======
+  async function registerTx(type){
+    if(!currentProduct){
+      alert("先に商品を検索してください（見つからない場合は手動登録）");
+      return;
+    }
+    const qty = Number(document.getElementById("qty").value) || 0;
+    if(qty <= 0){
+      alert("数量を入力してください");
+      return;
+    }
 
-    body:JSON.stringify({
+    try{
+      const action = (type === "仕入れ") ? "addBuy" : "addSale";
+      const res = await api({ action, productId: currentProduct.id, qty });
 
-      action:"addSale",
+      alert(res && res.message ? res.message : "登録しました");
 
-      productId:currentProduct.id,
+      // 入力クリア
+      document.getElementById("qty").value = 1;
+      document.getElementById("input").value = "";
+      document.getElementById("result").innerText = "";
+      currentProduct = null;
 
-      qty:qty
+    } catch(err){
+      alert("登録エラー: " + err);
+    }
+  }
 
-    })
+  // ======= 手動登録の開閉 =======
+  function toggleManual(){
+    const box = document.getElementById("manualBox");
+    box.style.display = (box.style.display === "none") ? "block" : "none";
+  }
 
-  });
+  // ======= 新規追加 =======
+  async function addNew(){
+    const name = document.getElementById("newName").value.trim();
+    const jan  = document.getElementById("newJan").value.trim();
+    const cost = Number(document.getElementById("newCost").value) || 0;
 
-  alert("登録完了");
+    if(!name){
+      alert("商品名を入力してください");
+      return;
+    }
 
-}
+    try{
+      const res = await api({ action: "addNewProduct", name, jan, cost });
 
+      if(res && res.ok){
+        document.getElementById("addResult").innerText =
+          "✅ 追加しました: " + res.name + "（" + res.id + "）";
 
+        // 追加した商品を選択状態に
+        currentProduct = { id: res.id, name: res.name };
+        document.getElementById("result").innerText =
+          "✅ 商品: " + res.name + "（" + res.id + "）";
 
-function toggleManual(){
+        // 入力クリアして閉じる
+        document.getElementById("newName").value = "";
+        document.getElementById("newJan").value = "";
+        document.getElementById("newCost").value = "";
+        toggleManual();
 
- const box = document.getElementById("manualBox");
-
- box.style.display =
-
- box.style.display==="none"
-
- ?
-
- "block"
-
- :
-
- "none";
-
-}
-
-
-
-function addNew(){
-
- const name = document.getElementById("newName").value;
-
- const jan = document.getElementById("newJan").value;
-
- const cost = document.getElementById("newCost").value;
-
-
-
- google.script.run
-
- .withSuccessHandler(function(res){
-
-  alert("追加完了");
-
- })
-
- .addNewProduct(
-
-  name,
-
-  jan,
-
-  cost
-
- );
-
-}
-
-
-
+      } else {
+        document.getElementById("addResult").innerText =
+          "⚠ " + (res && res.message ? res.message : "追加できませんでした");
+      }
+    } catch(err){
+      alert("追加エラー: " + err);
+    }
+  }
 </script>
 
-
-
 </body>
-
 </html>

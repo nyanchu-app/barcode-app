@@ -83,17 +83,20 @@ border:3px solid red;
 
   // ======= API（共通） =======
   async function api(payload){
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    // GASが落ちた/HTML返した等を検知するために一旦 text
-    const text = await res.text();
-    try { return JSON.parse(text); }
-    catch { throw new Error("API応答がJSONではありません: " + text.slice(0,120)); }
+  const res = await fetch(API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if(!res.ok){
+    throw new Error("HTTP " + res.status);
   }
 
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch { throw new Error("JSONじゃない: " + text.slice(0,120)); }
+}
   // ======= スキャン開始（JAN向け安定） =======
   async function startScan(){
     try{

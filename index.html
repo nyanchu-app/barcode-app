@@ -156,28 +156,7 @@ border:3px solid red;
   const res = await apiJsonp({ action:"searchProduct", query:q });
 
   // ======= 仕入/売上 登録 =======
-  async function registerTx(type){
-    if(!currentProduct){
-      alert("先に商品を検索してください");
-      return;
-    }
-    const qty = Number(document.getElementById("qty").value) || 0;
-    if(qty <= 0){
-      alert("数量を入力してください");
-      return;
-    }
-
-    const action = (type === "仕入れ") ? "addBuy" : "addSale";
-    const res = await api({ action, productId: currentProduct.id, qty });
-
-    alert(res && res.message ? res.message : "登録しました");
-
-    // クリア
-    document.getElementById("qty").value = 1;
-    document.getElementById("input").value = "";
-    document.getElementById("result").innerText = "";
-    currentProduct = null;
-  }
+  const res = await apiJsonp({ action, productId: currentProduct.id, qty });
 
   // ======= 手動登録の開閉 =======
   function toggleManual(){

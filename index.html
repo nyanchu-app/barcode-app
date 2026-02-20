@@ -4,15 +4,35 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://unpkg.com/html5-qrcode"></script>
   <style>
-    body{ font-family: Arial, sans-serif; padding:20px; margin:0; text-align:center; }
-    input, button{ width:100%; padding:15px; font-size:18px; margin-top:10px; box-sizing:border-box; }
-    button{ background:#2e7d32; color:white; border:none; border-radius:8px; }
-    .subbtn{ background:#1565c0; }
-    .danger{ background:#c62828; }
-    .box{ margin-top:18px; padding-top:12px; border-top:1px solid #ddd; }
-    #reader{ width:100%; max-width:460px; margin:12px auto; }
-    .small{ font-size:14px; color:#666; margin-top:6px; }
-  </style>
+  body{ font-family: Arial, sans-serif; padding:20px; margin:0; text-align:center; }
+  input, button{ width:100%; padding:15px; font-size:18px; margin-top:10px; box-sizing:border-box; }
+  button{ background:#2e7d32; color:white; border:none; border-radius:8px; }
+  .subbtn{ background:#1565c0; }
+  .danger{ background:#c62828; }
+  .box{ margin-top:18px; padding-top:12px; border-top:1px solid #ddd; }
+  #reader{ width:100%; max-width:460px; margin:12px auto; }
+  .small{ font-size:14px; color:#666; margin-top:6px; }
+
+  /* ===== ここから追加 ===== */
+
+  /* ① readerは背面 */
+  #reader{
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ② UIは最前面 */
+  #ui{
+    position: relative;
+    z-index: 9999;
+  }
+
+  /* ③ readerがタップを吸わないようにする */
+  #reader, #reader *{
+    pointer-events: none !important;
+  }
+
+</style>
 </head>
 <body>
 

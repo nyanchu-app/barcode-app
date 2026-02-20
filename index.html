@@ -21,7 +21,12 @@
 <button class="subbtn" onclick="startScan()">📷 スキャン開始</button>
 <button class="danger" onclick="stopScan()">⛔ スキャン停止</button>
 <div class="small">※JANが読めたら自動で検索します</div>
-<div id="reader"></div>
+<div id="reader" style="
+width:320px;
+height:200px;
+margin:20px auto;
+border:3px solid red;
+"></div>
 
 <input id="input" placeholder="バーコード(JAN) or 商品名で検索">
 <input id="qty" type="number" value="1" min="1">

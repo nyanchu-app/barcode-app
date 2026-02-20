@@ -142,6 +142,7 @@ border:3px solid red;
 
   // ======= 検索 =======
   async function search(){
+    document.getElementById("result").innerText = "🔄 検索中...";
     const q = document.getElementById("input").value.trim();
     if(!q){
       currentProduct = null;

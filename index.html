@@ -152,6 +152,33 @@ border:3px solid red;
     }
   }
 
+  function apiJsonp(params){
+  return new Promise((resolve, reject) => {
+    const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+    const qs = new URLSearchParams({ ...params, callback: cb, t: Date.now() }).toString();
+    const url = API_URL + "?" + qs;
+
+    const s = document.createElement("script");
+
+    window[cb] = (res) => {
+      cleanup();
+      resolve(res);
+    };
+
+    s.onerror = () => {
+      cleanup();
+      reject(new Error("Load failed (jsonp)"));
+    };
+
+    s.src = url;
+    document.body.appendChild(s);
+
+    function cleanup(){
+      try{ delete window[cb]; }catch(e){}
+      try{ s.remove(); }catch(e){}
+    }
+  });
+}
   // ======= 検索 =======
   const res = await apiJsonp({ action:"searchProduct", query:q });
 

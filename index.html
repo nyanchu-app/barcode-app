@@ -97,6 +97,7 @@ border:3px solid red;
   try { return JSON.parse(text); }
   catch { throw new Error("JSONじゃない: " + text.slice(0,120)); }
 }
+
   // ======= スキャン開始（JAN向け安定） =======
   async function startScan(){
     try{

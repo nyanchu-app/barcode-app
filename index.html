@@ -166,7 +166,7 @@ border:3px solid red;
     }
 
   }catch(e){
-    document.getElementById("result").innerText = "❌ エラー: " + e.message;
+    document.getElementById("result").innerText = "❌ エラー: " + (e && e.message ? e.message : String(e));
   }
 }
 

@@ -81,7 +81,6 @@ border:3px solid red;
   // カメラ
   let scanner = null;
 
-  // ======= API（共通） =======
   function apiJsonp(params){
   return new Promise((resolve, reject) => {
     const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
@@ -154,31 +153,7 @@ border:3px solid red;
   }
 
   // ======= 検索 =======
-  async function search(){
-  try{
-    document.getElementById("result").innerText = "🔄 検索中...";
-
-    const q = document.getElementById("input").value.trim();
-    if(!q){
-      currentProduct = null;
-      document.getElementById("result").innerText = "";
-      return;
-    }
-
-    const res = await api({ action:"searchProduct", query:q });
-
-    if(res && res.found){
-      currentProduct = res;
-      document.getElementById("result").innerText = `✅ 商品: ${res.name}（${res.id}）`;
-    } else {
-      currentProduct = null;
-      document.getElementById("result").innerText = "❌ 商品が見つかりません";
-    }
-
-  }catch(e){
-    document.getElementById("result").innerText = "❌ エラー: " + (e && e.message ? e.message : String(e));
-  }
-}
+  const res = await apiJsonp({ action:"searchProduct", query:q });
 
   // ======= 仕入/売上 登録 =======
   async function registerTx(type){

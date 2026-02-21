@@ -256,6 +256,8 @@
 
       if(res && res.ok){
         document.getElementById("addResult").innerText = `✅ 追加しました: ${res.name}（${res.id}）`;
+        document.getElementById("input").value = res.id;
+search();
         currentProduct = { id: res.id, name: res.name };
         document.getElementById("result").innerText = `✅ 商品: ${res.name}（${res.id}）`;
 

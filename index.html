@@ -273,6 +273,17 @@
   window.registerTx = registerTx;
   window.toggleManual = toggleManual;
   window.addNew = addNew;
+
+  // URLに ?jan=123... が付いてたら自動で入力→検索
+window.addEventListener("load", () => {
+  const p = new URLSearchParams(location.search);
+  const jan = p.get("jan");
+  if (jan) {
+    document.getElementById("input").value = jan;
+    // 少し待ってから検索（iPhoneで安定）
+    setTimeout(() => { window.search && window.search(); }, 200);
+  }
+});
 </script>
 
 </body>

@@ -167,34 +167,41 @@
 
   // ===== 検索 =====
   async function search(){
-    try{
-      document.getElementById("result").innerText = "🔄 検索中...";
 
-      const q = document.getElementById("input").value.trim();
-      if(!q){
-        currentProduct = null;
-        document.getElementById("result").innerText = "";
-        return;
-      }
+  const q = document.getElementById("input").value.trim();
 
-      const res = await apiJsonp({ action:"searchProduct", query:q });
-
-      if(res && res.ok && res.found){
-        currentProduct = { id: res.id, name: res.name };
-        document.getElementById("result").innerText = `✅ 商品: ${res.name}（${res.id}）`;
-      } else if(res && res.ok && !res.found){
-        currentProduct = null;
-        document.getElementById("result").innerText = "❌ 商品が見つかりません（手動登録できます）";
-      } else {
-        currentProduct = null;
-        document.getElementById("result").innerText = "❌ エラー: " + (res && res.message ? res.message : "不明な応答");
-      }
-
-    }catch(e){
-      currentProduct = null;
-      document.getElementById("result").innerText = "❌ エラー: " + (e && e.message ? e.message : String(e));
-    }
+  if(!q){
+    return;
   }
+
+  const res = await apiJsonp({
+    action:"searchProduct",
+    query:q
+  });
+
+  if(res.found){
+
+    currentProduct = res;
+
+    document.getElementById("result").innerText =
+      `✅ 商品: ${res.name}（${res.id}）`;
+
+  }else{
+
+    currentProduct = null;
+
+    document.getElementById("result").innerText =
+      "❌ 商品が見つかりません";
+
+    // ⭐ここが追加ポイント
+    document.getElementById("manualBox").style.display = "block";
+
+    // ⭐JANを自動入力
+    document.getElementById("newJan").value = q;
+
+  }
+
+}
 
   // ===== 仕入 / 売上 登録 =====
   async function registerTx(type){

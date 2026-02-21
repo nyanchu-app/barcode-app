@@ -114,59 +114,43 @@
 
   // ===== スキャン開始（JAN向け）=====
   async function startScan(){
-
   try{
-
-    if(scanner) return;
+    if (scanner) return;
 
     scanner = new Html5Qrcode("reader");
 
     await scanner.start(
-
       { facingMode: "environment" },
-
       {
         fps: 15,
+        qrbox: { width: 320, height: 160 },
+        aspectRatio: 1.777,
+        disableFlip: true,
 
-        qrbox: {
-          width: 300,
-          height: 150
-        },
-
-        aspectRatio: 1.0,
-
-        disableFlip: false,
-
+        // ✅ JAN系を明示（これが重要）
         formatsToSupport: [
           Html5QrcodeSupportedFormats.EAN_13,
           Html5QrcodeSupportedFormats.EAN_8,
           Html5QrcodeSupportedFormats.UPC_A,
           Html5QrcodeSupportedFormats.UPC_E,
           Html5QrcodeSupportedFormats.CODE_128
-        ]
+        ],
 
+        // ✅ 端末によって効く（効かなくてもOK）
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
       },
-
-      (decodedText)=>{
-
+      async (decodedText) => {
         document.getElementById("input").value = decodedText;
-
-        search();
-
-        stopScan();
-
+        await search();
+        await stopScan();
       }
-
     );
-
   }catch(e){
-
-    alert("カメラエラー: " + e.message);
-
-    scanner=null;
-
+    alert("スキャン開始エラー: " + (e && e.message ? e.message : String(e)));
+    scanner = null;
   }
-
 }
 
   async function stopScan(){

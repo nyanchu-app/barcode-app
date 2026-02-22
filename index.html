@@ -1,92 +1,142 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://unpkg.com/html5-qrcode"></script>
+
   <style>
-    body{ font-family: Arial, sans-serif; padding:20px; margin:0; text-align:center; }
-    input, button{ width:100%; padding:15px; font-size:18px; margin-top:10px; box-sizing:border-box; }
-    button{ background:#2e7d32; color:white; border:none; border-radius:8px; }
+    body{
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      margin: 0;
+      text-align: center;
+      background: #f5f5f5;
+    }
+    input, button{
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      margin-top: 10px;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 1px solid #ddd;
+    }
+    button{
+      background: #2e7d32;
+      color: white;
+      border: none;
+      border-radius: 10px;
+    }
     .subbtn{ background:#1565c0; }
     .danger{ background:#c62828; }
-    .box{ margin-top:18px; padding-top:12px; border-top:1px solid #ddd; }
-    .small{ font-size:14px; color:#666; margin-top:6px; }
-
-    /* readerはサイズ固定（映像がUIを覆わない） */
+    .box{
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #ddd;
+    }
     #reader{
-      width:100%;
-      max-width:460px;
-      height:240px;
-      margin:12px auto;
-      overflow:hidden;
-      border:3px solid red;   /* ←確認用（慣れたら消してOK） */
-      border-radius:12px;
-      position: relative;
-      z-index: 1;
+      width: 100%;
+      max-width: 460px;
+      margin: 12px auto;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
     }
-    #reader video{
-      width:100% !important;
-      height:240px !important;
-      object-fit:cover !important;
-      pointer-events:none !important;
+    .small{
+      font-size: 13px;
+      color: #666;
+      margin-top: 6px;
     }
-
-    /* UIは最前面 */
-    #ui{
-      position: relative;
-      z-index: 9999;
+    #candidates{
+      margin-top: 14px;
+      text-align: left;
+    }
+    .cand{
+      background: #fff;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      margin-top: 10px;
+    }
+    .cand .name{
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .cand .meta{
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+      line-height: 1.4;
+      word-break: break-all;
+    }
+    .cand button{
+      margin-top: 10px;
+      background: #1565c0;
+      border: none;
+      color: #fff;
+      border-radius: 10px;
+      padding: 10px;
+      width: 100%;
+    }
+    #result{
+      margin-top: 12px;
+      font-weight: bold;
     }
   </style>
 </head>
+
 <body>
 
 <h2>📦 商品登録</h2>
 
-<!-- カメラ -->
 <button class="subbtn" onclick="startScan()">📷 スキャン開始</button>
 <button class="danger" onclick="stopScan()">⛔ スキャン停止</button>
-<div class="small">※JANが読めたら自動で検索します</div>
+<div class="small">※ うまく読めない時は「ショートカット→URL起動」で運用が安定します</div>
 <div id="reader"></div>
 
-<!-- UI -->
-<div id="ui">
+<input id="input" placeholder="バーコード(JAN) or 商品名で検索">
+<input id="qty" type="number" value="1" min="1">
 
-  <input id="input" placeholder="バーコード(JAN) or 商品名で検索">
-  <input id="qty" type="number" value="1" min="1">
+<button onclick="search()">検索</button>
+<button onclick="registerTx('仕入れ')">仕入れ</button>
+<button onclick="registerTx('売上')">売上</button>
 
-  <button onclick="search()">検索</button>
-  <button onclick="registerTx('仕入れ')">仕入れ</button>
-  <button onclick="registerTx('売上')">売上</button>
+<p id="result"></p>
+<div id="candidates"></div>
 
-  <p id="result"></p>
+<button onclick="toggleManual()">➕ 手動で商品登録</button>
 
-  <button onclick="toggleManual()">➕ 手動で商品登録</button>
+<div id="manualBox" class="box" style="display:none;">
+  <h3>新規商品登録</h3>
 
-  <div id="manualBox" style="display:none;" class="box">
-    <h3>新規商品登録</h3>
-    <input id="newName" placeholder="商品名">
-    <input id="newJan" placeholder="JANコード（あれば）">
-    <input id="newCost" type="number" inputmode="decimal" placeholder="仕入単価（例：120）">
-    <button class="subbtn" onclick="addNew()">商品マスタに追加</button>
-    <p id="addResult"></p>
-  </div>
+  <input id="newName" placeholder="商品名（例：いちご大福）">
+  <input id="newJan" placeholder="JAN（あれば）">
+  <input id="newCost" type="number" inputmode="decimal" placeholder="仕入単価（例：120）">
 
+  <button class="subbtn" onclick="addNew()">商品マスタに追加</button>
+  <p id="addResult"></p>
 </div>
 
+
 <script>
-  // ✅ あなたのGAS /exec（JSONP対応の doGet が入ってるURL）
-  const API_URL = "https://script.google.com/macros/s/AKfycbxdezzcDuMok-YUJ6CUmK9ClV84CZXBxyXmetue5ooqQkY4E1_gPvnUW8yHW8Jv_kis/exec";
+  // =========================
+  // ★ここだけ必ず設定
+  // =========================
+  const API_URL = "https://script.google.com/macros/s/AKfycbxUY_9TR9Wu-urdCBvEv2aKQza2mPlVHOcZA6h5iHqTUDEtiUG5qYjTooMkAy2S0npr/exec";
 
+  // =========================
   // 状態
-  let currentProduct = null;
+  // =========================
+  let currentProduct = null;     // {id, name}
+  let scanner = null;            // Html5Qrcode instance
+  let __candidates = [];         // GASから返る候補配列
 
-  // カメラ
-  let scanner = null;
-
-  // ===== JSONP API =====
+  // =========================
+  // JSONP（GitHub Pages → GAS）
+  // =========================
   function apiJsonp(params){
     return new Promise((resolve, reject) => {
-      const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random()*1e6);
+      const cb = "cb_" + Date.now() + "_" + Math.floor(Math.random() * 1e6);
       const qs = new URLSearchParams({ ...params, callback: cb, t: Date.now() }).toString();
       const url = API_URL + "?" + qs;
 
@@ -99,7 +149,7 @@
 
       s.onerror = () => {
         cleanup();
-        reject(new Error("Load failed (jsonp)"));
+        reject(new Error("Load failed"));
       };
 
       s.src = url;
@@ -112,102 +162,103 @@
     });
   }
 
-  // ===== スキャン開始（JAN向け）=====
-  async function startScan(){
-  try{
-    if (scanner) return;
-
-    scanner = new Html5Qrcode("reader");
-
-    await scanner.start(
-      { facingMode: "environment" },
-      {
-        fps: 15,
-        qrbox: { width: 320, height: 160 },
-        aspectRatio: 1.777,
-        disableFlip: true,
-
-        // ✅ JAN系を明示（これが重要）
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128
-        ],
-
-        // ✅ 端末によって効く（効かなくてもOK）
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        }
-      },
-      async (decodedText) => {
-        document.getElementById("input").value = decodedText;
-        await search();
-        await stopScan();
-      }
-    );
-  }catch(e){
-    alert("スキャン開始エラー: " + (e && e.message ? e.message : String(e)));
-    scanner = null;
+  function setText(id, text){
+    document.getElementById(id).innerText = text || "";
   }
-}
 
-  async function stopScan(){
+  function clearCandidates(){
+    __candidates = [];
+    document.getElementById("candidates").innerHTML = "";
+  }
+
+  // =========================
+  // 検索（候補リスト対応）
+  // =========================
+  async function search(){
     try{
-      if (!scanner) return;
-      await scanner.stop();
-      await scanner.clear();
-    } catch(e) {
-      // stop失敗してもOK
-    } finally {
-      scanner = null;
+      const q = document.getElementById("input").value.trim();
+
+      clearCandidates();
+      setText("addResult", "");
+
+      if(!q){
+        currentProduct = null;
+        setText("result", "");
+        return;
+      }
+
+      setText("result", "🔍 検索中...");
+
+      const res = await apiJsonp({ action:"searchProduct", query:q });
+
+      if(!res || !res.ok){
+        currentProduct = null;
+        setText("result", "❌ エラー: " + (res && res.message ? res.message : "不明"));
+        return;
+      }
+
+      const list = Array.isArray(res.results) ? res.results : [];
+
+      if(list.length === 0){
+        currentProduct = null;
+        setText("result", "❌ 商品が見つかりません（手動登録できます）");
+
+        // 商品なし → 手動登録を自動で開く＆JANを自動入力
+        document.getElementById("manualBox").style.display = "block";
+        document.getElementById("newJan").value = q;
+        return;
+      }
+
+      if(list.length === 1){
+        selectCandidate(list[0]);
+        return;
+      }
+
+      // 複数候補 → リスト表示
+      setText("result", "候補から選んでください👇");
+      __candidates = list;
+
+      const html = list.map((item, idx) => {
+        const meta = [
+          item.id ? `ID: ${escapeHtml_(item.id)}` : "",
+          item.jan ? `JAN: ${escapeHtml_(item.jan)}` : ""
+        ].filter(Boolean).join(" / ");
+
+        return `
+          <div class="cand">
+            <div class="name">${escapeHtml_(item.name || "")}</div>
+            <div class="meta">${meta}</div>
+            <button onclick="pickCandidate(${idx})">これにする</button>
+          </div>
+        `;
+      }).join("");
+
+      document.getElementById("candidates").innerHTML = html;
+
+    }catch(e){
+      currentProduct = null;
+      setText("result", "❌ エラー: " + (e && e.message ? e.message : String(e)));
     }
   }
 
-  // ===== 検索 =====
-  async function search(){
-
-  const q = document.getElementById("input").value.trim();
-
-  if(!q){
-    return;
+  function pickCandidate(i){
+    const item = __candidates[i];
+    if(item) selectCandidate(item);
   }
 
-  const res = await apiJsonp({
-    action:"searchProduct",
-    query:q
-  });
-
-  if(res.found){
-
-    currentProduct = res;
-
-    document.getElementById("result").innerText =
-      `✅ 商品: ${res.name}（${res.id}）`;
-
-  }else{
-
-    currentProduct = null;
-
-    document.getElementById("result").innerText =
-      "❌ 商品が見つかりません";
-
-    // ⭐ここが追加ポイント
-    document.getElementById("manualBox").style.display = "block";
-
-    // ⭐JANを自動入力
-    document.getElementById("newJan").value = q;
-
+  function selectCandidate(item){
+    currentProduct = { id: item.id, name: item.name };
+    clearCandidates();
+    setText("result", `✅ 選択: ${item.name}（${item.id}）`);
   }
 
-}
-
-  // ===== 仕入 / 売上 登録 =====
+  // =========================
+  // 仕入 / 売上
+  // =========================
   async function registerTx(type){
     try{
       if(!currentProduct){
-        alert("先に商品を検索してください");
+        alert("先に商品を検索して選択してください");
         return;
       }
 
@@ -218,28 +269,37 @@
       }
 
       const action = (type === "仕入れ") ? "addBuy" : "addSale";
-      const res = await apiJsonp({ action, productId: currentProduct.id, qty });
 
-      alert(res && res.message ? res.message : "登録しました");
+      const res = await apiJsonp({
+        action,
+        productId: currentProduct.id,
+        qty
+      });
 
-      // 入力クリア
+      alert((res && res.message) ? res.message : "登録しました");
+
+      // 必要なら入力だけクリア（選択は残す運用もアリ）
       document.getElementById("qty").value = 1;
-      document.getElementById("input").value = "";
-      document.getElementById("result").innerText = "";
-      currentProduct = null;
+      // document.getElementById("input").value = "";
+      // setText("result", "");
+      // currentProduct = null;
 
     }catch(e){
       alert("登録エラー: " + (e && e.message ? e.message : String(e)));
     }
   }
 
-  // ===== 手動登録の開閉 =====
+  // =========================
+  // 手動登録の開閉
+  // =========================
   function toggleManual(){
     const box = document.getElementById("manualBox");
     box.style.display = (box.style.display === "none") ? "block" : "none";
   }
 
-  // ===== 新規追加（※GAS側に addNewProduct が必要）=====
+  // =========================
+  // 新規追加（完了メッセージ＋追加後に自動選択）
+  // =========================
   async function addNew(){
     try{
       const name = document.getElementById("newName").value.trim();
@@ -251,23 +311,30 @@
         return;
       }
 
-      // GAS側に addNewProduct を実装してある前提
-      const res = await apiJsonp({ action:"addNewProduct", name, jan, cost });
+      const res = await apiJsonp({
+        action:"addNewProduct",
+        name,
+        jan,
+        cost
+      });
+
+      // ✅ 完了メッセージ（alert + 画面表示）
+      const msg = (res && res.message) ? res.message : "処理しました";
+      alert(msg);
+      setText("addResult", msg);
 
       if(res && res.ok){
-        document.getElementById("addResult").innerText = `✅ 追加しました: ${res.name}（${res.id}）`;
+        // ✅ 追加したIDを input に入れて検索→選択状態にする
         document.getElementById("input").value = res.id;
-search();
-        currentProduct = { id: res.id, name: res.name };
-        document.getElementById("result").innerText = `✅ 商品: ${res.name}（${res.id}）`;
+        await search();
 
-        // 入力クリアして閉じる
+        // ✅ 入力クリア
         document.getElementById("newName").value = "";
         document.getElementById("newJan").value = "";
         document.getElementById("newCost").value = "";
-        toggleManual();
-      } else {
-        document.getElementById("addResult").innerText = "⚠ " + (res && res.message ? res.message : "追加できませんでした");
+
+        // 好み：閉じるならON
+        // document.getElementById("manualBox").style.display = "none";
       }
 
     }catch(e){
@@ -275,24 +342,83 @@ search();
     }
   }
 
-  // グローバル（iPhone Safari安定）
+  // =========================
+  // カメラ（補助：読めたら検索して停止）
+  // =========================
+  async function startScan(){
+    try{
+      if(scanner) return;
+
+      setText("result", "📷 起動中...");
+
+      scanner = new Html5Qrcode("reader");
+
+      await scanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 320, height: 160 },
+          aspectRatio: 1.777,
+          disableFlip: true
+        },
+        async (decodedText) => {
+          document.getElementById("input").value = decodedText;
+          await stopScan();
+          await search();
+        }
+      );
+
+      setText("result", "✅ 読み取り待機中");
+
+    }catch(e){
+      alert("スキャン開始エラー: " + (e && e.message ? e.message : String(e)));
+      scanner = null;
+      setText("result", "");
+    }
+  }
+
+  async function stopScan(){
+    try{
+      if(!scanner) return;
+      await scanner.stop();
+      await scanner.clear();
+    }catch(e){
+      // stop失敗してもOK
+    }finally{
+      scanner = null;
+    }
+  }
+
+  function escapeHtml_(s){
+    return String(s || "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  // =========================
+  // URLパラメータ ?jan= で自動検索（ショートカット運用用）
+  // =========================
+  window.addEventListener("load", () => {
+    const p = new URLSearchParams(location.search);
+    const jan = p.get("jan");
+    if(jan){
+      document.getElementById("input").value = jan;
+      setTimeout(() => { search(); }, 200);
+    }
+  });
+
+  // iPhone Safariでonclick安定用
   window.startScan = startScan;
   window.stopScan = stopScan;
   window.search = search;
   window.registerTx = registerTx;
   window.toggleManual = toggleManual;
   window.addNew = addNew;
-
-  // URLに ?jan=123... が付いてたら自動で入力→検索
-window.addEventListener("load", () => {
-  const p = new URLSearchParams(location.search);
-  const jan = p.get("jan");
-  if (jan) {
-    document.getElementById("input").value = jan;
-    // 少し待ってから検索（iPhoneで安定）
-    setTimeout(() => { window.search && window.search(); }, 200);
-  }
-});
+  window.pickCandidate = pickCandidate;
+  window.selectCandidate = selectCandidate;
 </script>
 
 </body>

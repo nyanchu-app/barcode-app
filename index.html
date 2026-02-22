@@ -303,46 +303,44 @@
   // 新規追加（完了メッセージ＋追加後に自動選択）
   // =========================
   async function addNew(){
-    try{
-      const name = document.getElementById("newName").value.trim();
-      const jan  = document.getElementById("newJan").value.trim();
-      const cost = Number(document.getElementById("newCost").value) || 0;
+  const name  = document.getElementById("newName").value.trim();
+  const jan   = document.getElementById("newJan").value.trim();
+  const cost  = Number(document.getElementById("newCost").value) || 0;
+  const price = Number(document.getElementById("newPrice").value) || 0;
+  const safe  = Number(document.getElementById("newSafe").value) || 0;
 
-      if(!name){
-        alert("商品名を入力してください");
-        return;
-      }
-
-      const res = await apiJsonp({
-        action:"addNewProduct",
-        name,
-        jan,
-        cost
-      });
-
-      // ✅ 完了メッセージ（alert + 画面表示）
-      const msg = (res && res.message) ? res.message : "処理しました";
-      alert(msg);
-      setText("addResult", msg);
-
-      if(res && res.ok){
-        // ✅ 追加したIDを input に入れて検索→選択状態にする
-        document.getElementById("input").value = res.id;
-        await search();
-
-        // ✅ 入力クリア
-        document.getElementById("newName").value = "";
-        document.getElementById("newJan").value = "";
-        document.getElementById("newCost").value = "";
-
-        // 好み：閉じるならON
-        // document.getElementById("manualBox").style.display = "none";
-      }
-
-    }catch(e){
-      alert("追加エラー: " + (e && e.message ? e.message : String(e)));
-    }
+  if(!name){
+    alert("商品名を入力してください");
+    return;
   }
+
+  const res = await apiJsonp({
+    action: "addNewProduct",
+    name, jan, cost, price, safe
+  });
+
+  if(res && res.ok){
+    alert(res.message || "追加しました");
+
+    document.getElementById("addResult").innerText =
+      `✅ 追加しました: ${res.name}（${res.id}）`;
+
+    // 追加した商品を選択状態にする
+    currentProduct = { id: res.id, name: res.name };
+    document.getElementById("result").innerText =
+      `✅ 商品: ${res.name}（${res.id}）`;
+
+    // 入力クリア
+    document.getElementById("newName").value = "";
+    document.getElementById("newJan").value = "";
+    document.getElementById("newCost").value = "";
+    document.getElementById("newPrice").value = "";
+    document.getElementById("newSafe").value = "";
+    toggleManual();
+  } else {
+    alert(res && res.message ? res.message : "追加できませんでした");
+  }
+}
 
   // =========================
   // カメラ（補助：読めたら検索して停止）

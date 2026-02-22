@@ -126,6 +126,7 @@
   // =========================
   const API_URL = "https://script.google.com/macros/s/AKfycbzsSKTnd2dD_QiG7OnuEXSa-UqhlfG4qxMIUatUf4AWNjXyOHTNUJco1bPuePcp7-xd/exec";
 
+  const DEFAULT_PRICE_MULT = 2.0; // 例：仕入×2（好きに変更OK）
   // =========================
   // 状態
   // =========================
@@ -306,7 +307,14 @@
   const name  = document.getElementById("newName").value.trim();
   const jan   = document.getElementById("newJan").value.trim();
   const cost  = Number(document.getElementById("newCost").value) || 0;
-  const price = Number(document.getElementById("newPrice").value) || 0;
+  let priceInput = document.getElementById("newPrice").value;
+  let price = Number(priceInput) || 0;
+
+// ✅ 販売単価が未入力なら「仕入単価×倍率」で仮入力
+　if (!price && cost > 0) {
+  price = Math.round(cost * DEFAULT_PRICE_MULT); // 端数は四捨五入
+  document.getElementById("newPrice").value = price; // 画面にも反映（嬉しい）
+　}
   const safe  = Number(document.getElementById("newSafe").value) || 0;
 
   if(!name){

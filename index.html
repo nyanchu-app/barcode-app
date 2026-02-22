@@ -29,11 +29,7 @@
     }
     .subbtn{ background:#1565c0; }
     .danger{ background:#c62828; }
-    .box{
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid #ddd;
-    }
+
     #reader{
       width: 100%;
       max-width: 460px;
@@ -46,7 +42,15 @@
       font-size: 13px;
       color: #666;
       margin-top: 6px;
+      line-height: 1.4;
     }
+
+    #result{
+      margin-top: 12px;
+      font-weight: bold;
+      white-space: pre-line;
+    }
+
     #candidates{
       margin-top: 14px;
       text-align: left;
@@ -78,9 +82,25 @@
       padding: 10px;
       width: 100%;
     }
-    #result{
+
+    .box{
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #ddd;
+    }
+
+    /* UNDO */
+    #undoBox{
+      display:none;
       margin-top: 12px;
-      font-weight: bold;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      text-align: left;
+    }
+    #undoBox .small{
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -91,7 +111,7 @@
 
 <button class="subbtn" onclick="startScan()">📷 スキャン開始</button>
 <button class="danger" onclick="stopScan()">⛔ スキャン停止</button>
-<div class="small">※ うまく読めない時は「ショートカット→URL起動」で運用が安定します</div>
+<div class="small">※ 読めない時は「iPhoneショートカット→URL起動（?jan=）」運用が安定です</div>
 <div id="reader"></div>
 
 <input id="input" placeholder="バーコード(JAN) or 商品名で検索">
@@ -102,6 +122,13 @@
 <button onclick="registerTx('売上')">売上</button>
 
 <p id="result"></p>
+
+<!-- ✅ UNDO UI -->
+<div id="undoBox">
+  <button class="danger" onclick="undoLast()">↩ 直前の登録を取り消す（30秒以内）</button>
+  <div class="small" id="undoMsg"></div>
+</div>
+
 <div id="candidates"></div>
 
 <button onclick="toggleManual()">➕ 手動で商品登録</button>
@@ -111,28 +138,94 @@
 
   <input id="newName" placeholder="商品名（例：いちご大福）">
   <input id="newJan" placeholder="JAN（あれば）">
-  <input id="newCost" type="number" inputmode="decimal" placeholder="仕入単価（例：120）">
-  <input id="newPrice" type="number" inputmode="decimal" placeholder="販売単価（例：250）">
+
+  <input id="newCost"  type="number" inputmode="decimal" placeholder="仕入単価（例：120）">
+  <input id="newPrice" type="number" inputmode="decimal" placeholder="販売単価（未入力なら自動仮入力）">
   <input id="newSafe"  type="number" inputmode="numeric" placeholder="安全在庫（例：10）">
-  
+
   <button class="subbtn" onclick="addNew()">商品マスタに追加</button>
   <p id="addResult"></p>
 </div>
 
-
 <script>
   // =========================
-  // ★ここだけ必ず設定
+  // ★設定
   // =========================
-  const API_URL = "https://script.google.com/macros/s/AKfycbwNetxnlsash_7JEWdnKV64Bxy0b1vhgmu6orh7Y0MU0M7pmLumpZAPDCcKN48FHSp0/exec";
+  const API_URL = "https://script.google.com/macros/s/AKfycbxUY_9TR9Wu-urdCBvEv2aKQza2mPlVHOcZA6h5iHqTUDEtiUG5qYjTooMkAy2S0npr/exec";
 
-  const DEFAULT_PRICE_MULT = 2.0; // 例：仕入×2（好きに変更OK）
+  // 販売単価が未入力なら「仕入×倍率」で仮入力（例：2倍）
+  const DEFAULT_PRICE_MULT = 2.0;
+
+  // UNDO猶予（ms）
+  const UNDO_WINDOW_MS = 30000;
+
   // =========================
   // 状態
   // =========================
-  let currentProduct = null;     // {id, name}
-  let scanner = null;            // Html5Qrcode instance
-  let __candidates = [];         // GASから返る候補配列
+  let currentProduct = null;      // {id, name}
+  let scanner = null;             // Html5Qrcode instance
+  let __candidates = [];          // search結果候補
+
+  // UNDO用（次のGAS改修で row/token が返ると完成）
+  let lastTx = null;              // {sheet,row,token,at,message}
+  let undoTimer = null;
+
+  // =========================
+  // DOM helper
+  // =========================
+  const $ = (id) => document.getElementById(id);
+
+  function setText(id, text){
+    $(id).innerText = text || "";
+  }
+
+  function clearCandidates(){
+    __candidates = [];
+    $("candidates").innerHTML = "";
+  }
+
+  // =========================
+  // 初期状態に戻す（Reset）
+  // =========================
+  function resetUI(){
+    currentProduct = null;
+
+    $("input").value = "";
+    $("qty").value = 1;
+
+    setText("result", "");
+    setText("addResult", "");
+
+    clearCandidates();
+
+    // 手動欄を閉じて入力も消す
+    $("manualBox").style.display = "none";
+    $("newName").value = "";
+    $("newJan").value = "";
+    $("newCost").value = "";
+    $("newPrice").value = "";
+    $("newSafe").value = "";
+  }
+
+  // =========================
+  // UNDO 表示/タイマー
+  // =========================
+  function showUndo(message){
+    $("undoBox").style.display = "block";
+    setText("undoMsg", message + "\n※30秒以内なら取り消せます");
+
+    if(undoTimer) clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => {
+      $("undoBox").style.display = "none";
+      lastTx = null;
+    }, UNDO_WINDOW_MS);
+  }
+
+  function hideUndo(){
+    $("undoBox").style.display = "none";
+    if(undoTimer) clearTimeout(undoTimer);
+    undoTimer = null;
+  }
 
   // =========================
   // JSONP（GitHub Pages → GAS）
@@ -165,21 +258,21 @@
     });
   }
 
-  function setText(id, text){
-    document.getElementById(id).innerText = text || "";
-  }
-
-  function clearCandidates(){
-    __candidates = [];
-    document.getElementById("candidates").innerHTML = "";
+  function escapeHtml_(s){
+    return String(s || "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
   }
 
   // =========================
-  // 検索（候補リスト対応）
+  // 検索（候補リスト）
   // =========================
   async function search(){
     try{
-      const q = document.getElementById("input").value.trim();
+      const q = $("input").value.trim();
 
       clearCandidates();
       setText("addResult", "");
@@ -206,9 +299,9 @@
         currentProduct = null;
         setText("result", "❌ 商品が見つかりません（手動登録できます）");
 
-        // 商品なし → 手動登録を自動で開く＆JANを自動入力
-        document.getElementById("manualBox").style.display = "block";
-        document.getElementById("newJan").value = q;
+        // 商品なし → 手動登録を自動で開く & JANを自動入力
+        $("manualBox").style.display = "block";
+        $("newJan").value = q;
         return;
       }
 
@@ -217,7 +310,6 @@
         return;
       }
 
-      // 複数候補 → リスト表示
       setText("result", "候補から選んでください👇");
       __candidates = list;
 
@@ -236,7 +328,7 @@
         `;
       }).join("");
 
-      document.getElementById("candidates").innerHTML = html;
+      $("candidates").innerHTML = html;
 
     }catch(e){
       currentProduct = null;
@@ -256,7 +348,7 @@
   }
 
   // =========================
-  // 仕入 / 売上
+  // 仕入 / 売上（成功したら初期状態へ）
   // =========================
   async function registerTx(type){
     try{
@@ -265,27 +357,32 @@
         return;
       }
 
-      const qty = Number(document.getElementById("qty").value) || 0;
+      const qty = Number($("qty").value) || 0;
       if(qty <= 0){
         alert("数量を入力してください");
         return;
       }
 
       const action = (type === "仕入れ") ? "addBuy" : "addSale";
+      const res = await apiJsonp({ action, productId: currentProduct.id, qty });
 
-      const res = await apiJsonp({
-        action,
-        productId: currentProduct.id,
-        qty
-      });
+      const msg = (res && res.message) ? res.message : "登録しました";
+      alert(msg);
 
-      alert((res && res.message) ? res.message : "登録しました");
+      // ✅ UNDO用に保存（※次のGAS改修で row/token が返ると完成）
+      // 返ってこない場合でもとりあえずメッセージだけ表示しておく
+      lastTx = {
+        sheet: res && res.sheet ? res.sheet : null,
+        row:   res && res.row ? Number(res.row) : null,
+        token: res && res.token ? res.token : null,
+        at: Date.now(),
+        message: msg
+      };
 
-      // 必要なら入力だけクリア（選択は残す運用もアリ）
-      document.getElementById("qty").value = 1;
-      // document.getElementById("input").value = "";
-      // setText("result", "");
-      // currentProduct = null;
+      showUndo(msg);
+
+      // ✅ 初期状態に戻す（これがあなたの理想の動き）
+      resetUI();
 
     }catch(e){
       alert("登録エラー: " + (e && e.message ? e.message : String(e)));
@@ -293,72 +390,108 @@
   }
 
   // =========================
+  // UNDO（GAS側が row/token を返したら完成）
+  // =========================
+  async function undoLast(){
+    try{
+      if(!lastTx){
+        alert("取り消せるデータがありません");
+        return;
+      }
+
+      // まだGASが行番号を返してない場合
+      if(!lastTx.sheet || !lastTx.row || !lastTx.token){
+        alert("UNDOは次のステップ（GAS改修：行番号返却）が終わると使えるようになります🙏");
+        return;
+      }
+
+      const res = await apiJsonp({
+        action: "undo",
+        sheet: lastTx.sheet,
+        row: String(lastTx.row),
+        token: lastTx.token
+      });
+
+      alert((res && res.message) ? res.message : "取り消しました");
+      hideUndo();
+      lastTx = null;
+
+    }catch(e){
+      alert("UNDOエラー: " + (e && e.message ? e.message : String(e)));
+    }
+  }
+
+  // =========================
   // 手動登録の開閉
   // =========================
   function toggleManual(){
-    const box = document.getElementById("manualBox");
-    box.style.display = (box.style.display === "none") ? "block" : "none";
+    $("manualBox").style.display = ($("manualBox").style.display === "none") ? "block" : "none";
   }
 
   // =========================
-  // 新規追加（完了メッセージ＋追加後に自動選択）
+  // 新規商品追加（販売単価が未入力なら仮入力）
+  // 追加成功後：自動選択 → 数量入力 → 仕入/売上 → 登録成功で初期化
   // =========================
   async function addNew(){
-  const name  = document.getElementById("newName").value.trim();
-  const jan   = document.getElementById("newJan").value.trim();
-  const cost  = Number(document.getElementById("newCost").value) || 0;
-  let priceInput = document.getElementById("newPrice").value;
-  let price = Number(priceInput) || 0;
+    try{
+      const name = $("newName").value.trim();
+      const jan  = $("newJan").value.trim();
+      const cost = Number($("newCost").value) || 0;
+      let price  = Number($("newPrice").value) || 0;
+      const safe = Number($("newSafe").value) || 0;
 
-// ✅ 販売単価が未入力なら「仕入単価×倍率」で仮入力
-　if (!price && cost > 0) {
-  price = Math.round(cost * DEFAULT_PRICE_MULT); // 端数は四捨五入
-  document.getElementById("newPrice").value = price; // 画面にも反映（嬉しい）
-　}
-  const safe  = Number(document.getElementById("newSafe").value) || 0;
+      if(!name){
+        alert("商品名を入力してください");
+        return;
+      }
 
-  if(!name){
-    alert("商品名を入力してください");
-    return;
+      // ✅ 販売単価 未入力なら自動仮入力（仕入×倍率）
+      if(!price && cost > 0){
+        price = Math.round(cost * DEFAULT_PRICE_MULT);
+        $("newPrice").value = price; // 画面にも反映
+      }
+
+      const res = await apiJsonp({
+        action:"addNewProduct",
+        name, jan, cost, price, safe
+      });
+
+      const msg = (res && res.message) ? res.message : "処理しました";
+
+      // ✅ 完了メッセージ（alert + 画面表示）
+      alert(msg);
+      setText("addResult", msg);
+
+      if(res && res.ok){
+        // ✅ 追加後に選択状態にする（即仕入に行ける）
+        $("input").value = res.id;
+        await search();
+
+        // 手動入力欄はクリア（箱は開いたままでも閉じてもOK）
+        $("newName").value = "";
+        // newJan は残す派もいるけど、基本は消す
+        $("newJan").value = "";
+        $("newCost").value = "";
+        $("newPrice").value = "";
+        $("newSafe").value = "";
+
+        // 好み：閉じる
+        $("manualBox").style.display = "none";
+      }
+
+    }catch(e){
+      alert("追加エラー: " + (e && e.message ? e.message : String(e)));
+    }
   }
-
-  const res = await apiJsonp({
-    action: "addNewProduct",
-    name, jan, cost, price, safe
-  });
-
-  if(res && res.ok){
-    alert(res.message || "追加しました");
-
-    document.getElementById("addResult").innerText =
-      `✅ 追加しました: ${res.name}（${res.id}）`;
-
-    // 追加した商品を選択状態にする
-    currentProduct = { id: res.id, name: res.name };
-    document.getElementById("result").innerText =
-      `✅ 商品: ${res.name}（${res.id}）`;
-
-    // 入力クリア
-    document.getElementById("newName").value = "";
-    document.getElementById("newJan").value = "";
-    document.getElementById("newCost").value = "";
-    document.getElementById("newPrice").value = "";
-    document.getElementById("newSafe").value = "";
-    toggleManual();
-  } else {
-    alert(res && res.message ? res.message : "追加できませんでした");
-  }
-}
 
   // =========================
-  // カメラ（補助：読めたら検索して停止）
+  // カメラ：読めたら検索して停止
   // =========================
   async function startScan(){
     try{
       if(scanner) return;
 
       setText("result", "📷 起動中...");
-
       scanner = new Html5Qrcode("reader");
 
       await scanner.start(
@@ -370,7 +503,7 @@
           disableFlip: true
         },
         async (decodedText) => {
-          document.getElementById("input").value = decodedText;
+          $("input").value = decodedText;
           await stopScan();
           await search();
         }
@@ -397,24 +530,15 @@
     }
   }
 
-  function escapeHtml_(s){
-    return String(s || "")
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#039;");
-  }
-
   // =========================
-  // URLパラメータ ?jan= で自動検索（ショートカット運用用）
+  // ショートカット運用：?jan= で自動検索
   // =========================
   window.addEventListener("load", () => {
     const p = new URLSearchParams(location.search);
     const jan = p.get("jan");
     if(jan){
-      document.getElementById("input").value = jan;
-      setTimeout(() => { search(); }, 200);
+      $("input").value = jan;
+      setTimeout(() => { search(); }, 150);
     }
   });
 
@@ -423,10 +547,12 @@
   window.stopScan = stopScan;
   window.search = search;
   window.registerTx = registerTx;
+  window.undoLast = undoLast;
   window.toggleManual = toggleManual;
   window.addNew = addNew;
   window.pickCandidate = pickCandidate;
   window.selectCandidate = selectCandidate;
+  window.resetUI = resetUI;
 </script>
 
 </body>
